@@ -1,28 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/check.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
-    },
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    { "src": "/api/check", "dest": "/api/check.py" },
-    { "src": "/api/(.*)", "dest": "/api/index.py" },
-    { "src": "/(.*)", "dest": "/api/index.py" }
-  ],
-  "env": {
-    "PROXY_LIST": ""
-  },
   "functions": {
     "api/check.py": {
       "maxDuration": 60,
       "memory": 1024
     }
+  },
+  "rewrites": [
+    { "source": "/api/check", "destination": "/api/check.py" },
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/(.*)", "destination": "/api/index.py" }
+  ],
+  "env": {
+    "PROXY_LIST": ""
   }
 }
