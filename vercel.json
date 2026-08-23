@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/check.py": {
+    "api/index.py": {
       "maxDuration": 60,
       "memory": 15360
     }
