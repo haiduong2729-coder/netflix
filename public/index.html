@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NX Checker · Cookie Verification</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    /* ── tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:         #080808;
+      --surface:    #111111;
+      --panel:      #161616;
+      --border:     #222222;
+      --border-hi:  #333333;
+      --red:        #e50914;
+      --red-dim:    rgba(229,9,20,.12);
+      --red-glow:   rgba(229,9,20,.35);
+      --green:      #10b981;
+      --green-dim:  rgba(16,185,129,.12);
+      --amber:      #f59e0b;
+      --amber-dim:  rgba(245,158,11,.12);
+      --blue:       #3b82f6;
+      --blue-dim:   rgba(59,130,246,.12);
+      --text:       #f0f0f0;
+      --text-2:     #888888;
+      --text-3:     #555555;
+      --mono:       'JetBrains Mono', monospace;
+      --sans:       'Inter', system-ui, sans-serif;
+      --r:          8px;
+      --r-lg:       12px;
+    }
+
+    /* ── reset ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── scan-line overlay (signature element) ───────────── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,.04) 2px,
+        rgba(0,0,0,.04) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── layout ──────────────────────────────────────────── */
+    .shell {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 20px 60px;
+    }
+
+    /* ── header ──────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 0 32px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 36px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: var(--red);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      box-shadow: 0 0 20px var(--red-glow);
+      flex-shrink: 0;
+    }
+    .logo-text {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .logo-text span { color: var(--text-2); font-weight: 400; }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .proxy-badge {
+      padding: 5px 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: .75rem;
+      color: var(--text-2);
+      font-family: var(--mono);
+    }
+    .proxy-badge .dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+      background: var(--text-3);
+    }
+    .proxy-badge.active .dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+    /* ── top grid ────────────────────────────────────────── */
+    .top-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 720px) {
+      .top-grid { grid-template-columns: 1fr; }
+      header { flex-direction: column; gap: 16px; align-items: flex-start; }
+    }
+
+    /* ── drop zone ───────────────────────────────────────── */
+    .drop-zone {
+      border: 1.5px dashed var(--border-hi);
+      border-radius: var(--r-lg);
+      background: var(--surface);
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .drop-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, var(--red-dim) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .drop-zone:hover, .drop-zone.over {
+      border-color: var(--red);
+      background: #141010;
+    }
+    .drop-zone:hover::before, .drop-zone.over::before { opacity: 1; }
+    .drop-icon { font-size: 2rem; line-height: 1; }
+    .drop-title { font-size: .9rem; font-weight: 600; }
+    .drop-sub { font-size: .75rem; color: var(--text-2); }
+    .drop-meta {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--text-3);
+      white-space: nowrap;
+    }
+    #fileInput { display: none; }
+
+    /* ── textarea panel ──────────────────────────────────── */
+    .input-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .input-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: .75rem;
+      color: var(--text-2);
+    }
+    .input-panel-header strong { color: var(--text); font-size: .8rem; }
+    #cookieTextarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: .75rem;
+      line-height: 1.6;
+      padding: 14px;
+      resize: none;
+      min-height: 158px;
+      direction: ltr;
+    }
+    #cookieTextarea::placeholder { color: var(--text-3); }
+    .input-footer {
+      padding: 8px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: .72rem;
+      color: var(--text-3);
+    }
+
+    /* ── action bar ──────────────────────────────────────── */
+    .action-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    /* ── buttons ─────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 18px;
+      border: none;
+      border-radius: var(--r);
+      font-family: var(--sans);
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s, box-shadow .15s;
+      white-space: nowrap;
+    }
+    .btn:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: .38; cursor: not-allowed; }
+    .btn-primary { background: var(--red); color: #fff; box-shadow: 0 4px 18px var(--red-glow); }
+    .btn-danger  { background: #7f1d1d; color: #fca5a5; }
+    .btn-ghost   { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--border-hi); }
+    .btn-success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
+    .btn-sm { padding: 5px 11px; font-size: .73rem; }
+
+    /* ── stats row ───────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 560px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 16px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .stat-card.pulse::before { opacity: 1; animation: statpulse .5s ease-out; }
+    @keyframes statpulse {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    .stat-card[data-color="red"]::before    { background: var(--red-dim); }
+    .stat-card[data-color="green"]::before  { background: var(--green-dim); }
+    .stat-card[data-color="amber"]::before  { background: var(--amber-dim); }
+    .stat-card[data-color="blue"]::before   { background: var(--blue-dim); }
+
+    .stat-num {
+      font-size: 2rem;
+      font-weight: 900;
+      font-family: var(--mono);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat-label { font-size: .72rem; color: var(--text-2); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-card[data-color="blue"]   .stat-num { color: var(--blue); }
+    .stat-card[data-color="green"]  .stat-num { color: var(--green); }
+    .stat-card[data-color="red"]    .stat-num { color: var(--red); }
+    .stat-card[data-color="amber"]  .stat-num { color: var(--amber); }
+
+    /* ── progress ────────────────────────────────────────── */
+    #progressWrap {
+      margin-bottom: 20px;
+      display: none;
+    }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .75rem;
+      color: var(--text-2);
+      margin-bottom: 7px;
+      font-family: var(--mono);
+    }
+    .progress-track {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #progressFill {
+      height: 100%;
+      width: 0%;
+      background: var(--red);
+      border-radius: 2px;
+      transition: width .3s ease;
+      box-shadow: 0 0 8px var(--red-glow);
+    }
+    #progressFill.scanning {
+      animation: scan 1.4s ease-in-out infinite;
+    }
+    @keyframes scan {
+      0%   { box-shadow: 0 0 4px var(--red-glow); }
+      50%  { box-shadow: 0 0 14px var(--red-glow), 0 0 24px var(--red-glow); }
+      100% { box-shadow: 0 0 4px var(--red-glow); }
+    }
+
+    /* ── filter tabs ─────────────────────────────────────── */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .filter-tab {
+      padding: 5px 13px;
+      border-radius: 20px;
+      font-size: .76rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-2);
+      transition: all .15s;
+    }
+    .filter-tab:hover { color: var(--text); border-color: var(--border-hi); }
+    .filter-tab.active { background: var(--red); color: #fff; border-color: var(--red); }
+    .filter-spacer { flex: 1; }
+    .sort-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text-2);
+      font-size: .75rem;
+      padding: 5px 10px;
+      font-family: var(--sans);
+      cursor: pointer;
+      outline: none;
+    }
+    .sort-select:hover { border-color: var(--border-hi); }
+
+    /* ── results ─────────────────────────────────────────── */
+    #resultsList { display: flex; flex-direction: column; gap: 8px; }
+    #emptyState {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-3);
+    }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-text { font-size: .88rem; }
+
+    /* ── result card ─────────────────────────────────────── */
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      transition: border-color .2s;
+      animation: cardIn .25s ease-out;
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .result-card:hover { border-color: var(--border-hi); }
+    .result-card.valid  { border-left: 3px solid var(--green); }
+    .result-card.invalid { border-left: 3px solid var(--red); }
+    .result-card.error  { border-left: 3px solid var(--amber); }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .result-header:hover { background: rgba(255,255,255,.02); }
+
+    .status-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.valid  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.invalid { background: var(--red); }
+    .status-dot.error  { background: var(--amber); }
+
+    .result-index {
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--text-3);
+      min-width: 28px;
+    }
+    .result-snippet {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--text-2);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .result-msg {
+      font-size: .76rem;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .result-msg.valid  { color: var(--green); }
+    .result-msg.invalid { color: var(--red); }
+    .result-msg.error  { color: var(--amber); }
+
+    .result-chevron {
+      color: var(--text-3);
+      font-size: .7rem;
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+    .result-card.open .result-chevron { transform: rotate(180deg); }
+
+    /* ── expandable body ─────────────────────────────────── */
+    .result-body {
+      display: none;
+      padding: 0 16px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .result-card.open .result-body { display: block; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+      padding: 12px 0;
+    }
+    .detail-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 9px 11px;
+    }
+    .detail-key {
+      font-size: .67rem;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 3px;
+    }
+    .detail-val {
+      font-size: .82rem;
+      font-weight: 600;
+      font-family: var(--mono);
+    }
+    .detail-val.green { color: var(--green); }
+
+    .cookie-block {
+      background: #0c0c0c;
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--text-2);
+      word-break: break-all;
+      line-height: 1.5;
+      direction: ltr;
+      margin-bottom: 10px;
+    }
+
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+    .token-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 12px;
+      margin-top: 4px;
+    }
+    .token-label {
+      font-size: .72rem;
+      color: var(--text-2);
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .token-value {
+      font-family: var(--mono);
+      font-size: .68rem;
+      color: var(--green);
+      background: #030a06;
+      border: 1px solid #064e3b;
+      border-radius: 4px;
+      padding: 7px 9px;
+      word-break: break-all;
+      margin-bottom: 8px;
+      direction: ltr;
+    }
+    .link-pills {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    .link-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: .73rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text);
+      text-decoration: none;
+      transition: all .15s;
+    }
+    .link-pill:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── proxy modal ─────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+    .modal-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--border-hi);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 500px;
+      padding: 28px;
+      transform: scale(.96);
+      transition: transform .2s;
+    }
+    .modal-overlay.show .modal { transform: scale(1); }
+    .modal-title { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+    .modal-sub { font-size: .8rem; color: var(--text-2); margin-bottom: 18px; }
+    .modal label { display: block; font-size: .78rem; font-weight: 600; margin-bottom: 6px; color: var(--text-2); }
+    .modal textarea, .modal input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: .75rem;
+      padding: 10px 12px;
+      outline: none;
+      resize: vertical;
+    }
+    .modal textarea { min-height: 120px; }
+    .modal textarea:focus, .modal input:focus { border-color: var(--red); }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    /* ── toast ───────────────────────────────────────────── */
+    #toastContainer {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 9000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      padding: 10px 16px;
+      border-radius: var(--r);
+      font-size: .8rem;
+      font-weight: 600;
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,.5);
+      animation: toastIn .25s ease-out;
+      cursor: pointer;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .toast-success { background: #064e3b; border: 1px solid #065f46; }
+    .toast-error   { background: #7f1d1d; border: 1px solid #991b1b; }
+    .toast-info    { background: #1e3a5f; border: 1px solid #1e40af; }
+    .toast-out { animation: toastOut .2s ease-in forwards; }
+    @keyframes toastOut { to { opacity: 0; transform: translateX(20px); } }
+
+    /* ── table view (optional, scrollable on mobile) ─────── */
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .78rem;
+    }
+    .results-table th {
+      text-align: left;
+      padding: 9px 12px;
+      color: var(--text-3);
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .results-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .results-table tr:hover td { background: rgba(255,255,255,.02); }
+
+    /* ── scrollbar ───────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+    /* ── utility ─────────────────────────────────────────── */
+    .text-mono { font-family: var(--mono); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- header -->
+    <header>
+      <div class="logo">
+        <div class="logo-icon">NX</div>
+        <div>
+          <div class="logo-text">NX Checker <span>/ Cookie Verifier</span></div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="proxy-badge" id="proxyBadge">
+          <span class="dot"></span>No proxies
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="openProxyModal()">⚙ Proxy Config</button>
+      </div>
+    </header>
+
+    <!-- input grid -->
+    <div class="top-grid">
+
+      <!-- drop zone -->
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon">📂</div>
+        <div class="drop-title">Drop ZIP or TXT file</div>
+        <div class="drop-sub">Supports .zip, .txt, .csv — extracts automatically</div>
+        <div class="drop-meta" id="dropMeta">0 cookies loaded</div>
+        <input type="file" id="fileInput" accept=".zip,.txt,.csv" multiple />
+      </div>
+
+      <!-- paste panel -->
+      <div class="input-panel">
+        <div class="input-panel-header">
+          <strong>Paste Cookies</strong>
+          <span id="lineCount">0 lines</span>
+        </div>
+        <textarea
+          id="cookieTextarea"
+          spellcheck="false"
+          placeholder="Paste cookie strings here, one per line.&#10;&#10;Supports:&#10;  key=val; key=val; ...  (header format)&#10;  Netscape tab-delimited format"
+        ></textarea>
+        <div class="input-footer">
+          <span>Max 50 per batch</span>
+          <button class="btn btn-ghost btn-sm" onclick="clearInput()">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- action bar -->
+    <div class="action-bar">
+      <button class="btn btn-primary" id="btnStart" onclick="startCheck()">▶ Start Check</button>
+      <button class="btn btn-danger hidden" id="btnStop" onclick="stopCheck()">■ Stop</button>
+      <button class="btn btn-ghost" onclick="clearAll()">🗑 Clear All</button>
+      <button class="btn btn-success" id="btnExport" disabled onclick="exportValid()">↓ Export Valid</button>
+      <button class="btn btn-ghost btn-sm" id="btnExportJson" disabled onclick="exportJson()">↓ JSON</button>
+    </div>
+
+    <!-- progress -->
+    <div id="progressWrap">
+      <div class="progress-label">
+        <span id="progressStatus">Scanning…</span>
+        <span id="progressCount" class="text-mono">0 / 0</span>
+      </div>
+      <div class="progress-track">
+        <div id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- stats -->
+    <div class="stats-row">
+      <div class="stat-card" data-color="blue">
+        <div class="stat-num" id="sTotal">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card" data-color="green">
+        <div class="stat-num" id="sValid">0</div>
+        <div class="stat-label">Valid</div>
+      </div>
+      <div class="stat-card" data-color="red">
+        <div class="stat-num" id="sInvalid">0</div>
+        <div class="stat-label">Invalid</div>
+      </div>
+      <div class="stat-card" data-color="amber">
+        <div class="stat-num" id="sError">0</div>
+        <div class="stat-label">Errors</div>
+      </div>
+    </div>
+
+    <!-- filter + sort -->
+    <div class="filter-bar">
+      <button class="filter-tab active" onclick="setFilter('all',this)">All</button>
+      <button class="filter-tab" onclick="setFilter('valid',this)">✅ Valid</button>
+      <button class="filter-tab" onclick="setFilter('invalid',this)">❌ Invalid</button>
+      <button class="filter-tab" onclick="setFilter('error',this)">⚠ Errors</button>
+      <div class="filter-spacer"></div>
+      <select class="sort-select" id="sortSelect" onchange="rerenderList()">
+        <option value="index">Sort: Index</option>
+        <option value="status">Sort: Status</option>
+        <option value="valid-first">Valid first</option>
+      </select>
+    </div>
+
+    <!-- results -->
+    <div id="resultsList">
+      <div id="emptyState">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-text">No results yet — load cookies and press Start</div>
+      </div>
+    </div>
+  </div><!-- /shell -->
+
+  <!-- proxy modal -->
+  <div class="modal-overlay" id="proxyModal" onclick="closeProxyModal(event)">
+    <div class="modal">
+      <div class="modal-title">⚙ Proxy Configuration</div>
+      <div class="modal-sub">
+        Proxies are stored in the <code>PROXY_LIST</code> environment variable on Vercel.<br>
+        Paste them here to preview — they take effect after redeployment.
+      </div>
+      <label>Proxy list (one per line)</label>
+      <textarea id="proxyInput" placeholder="ip:port&#10;user:pass@ip:port&#10;..."></textarea>
+      <label style="margin-top:14px;">Workers (concurrent checks)</label>
+      <input type="number" id="workerInput" min="1" max="20" value="6" />
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeProxyModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveProxyConfig()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- toast container -->
+  <div id="toastContainer"></div>
+
+  <script>
+  'use strict';
+
+  /* ── state ──────────────────────────────────────────────── */
+  let _fileCookies   = [];   // from uploaded files
+  let _allResults    = [];   // all check results
+  let _activeFilter  = 'all';
+  let _abortFlag     = false;
+  let _running       = false;
+  let _workerCount   = 6;
+  let _proxyList     = [];
+
+  /* ── DOM refs ────────────────────────────────────────────── */
+  const $ = id => document.getElementById(id);
+  const dropZone   = $('dropZone');
+  const fileInput  = $('fileInput');
+  const textarea   = $('cookieTextarea');
+  const btnStart   = $('btnStart');
+  const btnStop    = $('btnStop');
+  const btnExport  = $('btnExport');
+  const btnExportJ = $('btnExportJson');
+
+  /* ── drag-drop ───────────────────────────────────────────── */
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('over');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+  textarea.addEventListener('input', updateLineCount);
+
+  async function handleFiles(files) {
+    let added = 0;
+    for (const file of files) {
+      if (file.name.endsWith('.zip')) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          for (const [name, entry] of Object.entries(zip.files)) {
+            if (!entry.dir && /\.(txt|csv)$/i.test(name)) {
+              const text = await entry.async('string');
+              const lines = parseCookieText(text);
+              _fileCookies.push(...lines);
+              added += lines.length;
+            }
+          }
+        } catch (e) { toast('ZIP parse error: ' + e.message, 'error'); }
+      } else {
+        const text = await file.text();
+        const lines = parseCookieText(text);
+        _fileCookies.push(...lines);
+        added += lines.length;
+      }
+    }
+    _fileCookies = [...new Set(_fileCookies)];
+    $('dropMeta').textContent = `${_fileCookies.length} cookies loaded`;
+    if (added) toast(`Loaded ${added} cookies from file`, 'info');
+    updateLineCount();
+    fileInput.value = '';
+  }
+
+  function parseCookieText(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.includes('='));
+    // Group Netscape lines
+    const result = [];
+    const buf = [];
+    for (const line of lines) {
+      if (line.includes('\t') || (line.split('\t').length >= 7)) {
+        buf.push(line);
+      } else {
+        if (buf.length) { result.push(mergeNetscape(buf)); buf.length = 0; }
+        result.push(line);
+      }
+    }
+    if (buf.length) result.push(mergeNetscape(buf));
+    return result.filter(Boolean);
+  }
+
+  function mergeNetscape(lines) {
+    const kv = {};
+    for (const l of lines) {
+      const p = l.split('\t');
+      if (p.length >= 7) kv[p[5].trim()] = p[6].trim();
+    }
+    return Object.entries(kv).map(([k,v]) => `${k}=${v}`).join('; ');
+  }
+
+  function updateLineCount() {
+    const n = textarea.value.split('\n').filter(l => l.trim() && l.includes('=')).length;
+    $('lineCount').textContent = `${n} lines`;
+  }
+
+  /* ── collect all cookies ─────────────────────────────────── */
+  function collectCookies() {
+    const manual = parseCookieText(textarea.value);
+    const all = [...new Set([..._fileCookies, ...manual])];
+    return all.filter(c => c.includes('=') && c.length > 8);
+  }
+
+  /* ── check flow ──────────────────────────────────────────── */
+  async function startCheck() {
+    const cookies = collectCookies();
+    if (!cookies.length) { toast('No cookies to check', 'error'); return; }
+
+    _allResults = [];
+    _abortFlag  = false;
+    _running    = true;
+
+    btnStart.classList.add('hidden');
+    btnStop.classList.remove('hidden');
+    $('progressWrap').style.display = 'block';
+    $('progressFill').classList.add('scanning');
+    $('resultsList').innerHTML = '';
+    btnExport.disabled = true;
+    btnExportJ.disabled = true;
+
+    updateStats();
+
+    const BATCH = 10;   // cookies per API request
+    const total  = Math.min(cookies.length, 200); // hard cap at 200
+    let done = 0;
+
+    updateProgress(0, total, 'Scanning…');
+
+    for (let i = 0; i < total; i += BATCH) {
+      if (_abortFlag) break;
+      const batch = cookies.slice(i, i + BATCH);
+      try {
+        const resp = await fetch('/api/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cookies: batch.join('\n') }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: resp.statusText }));
+          toast(`API error: ${err.error || resp.status}`, 'error');
+          break;
+        }
+        const data = await resp.json();
+        if (data.results) {
+          // re-index
+          data.results.forEach(r => { r.index = done + (r.index || 1); });
+          _allResults.push(...data.results);
+        }
+      } catch (e) {
+        if (!_abortFlag) toast('Network error: ' + e.message, 'error');
+        break;
+      }
+      done += batch.length;
+      updateProgress(done, total, _abortFlag ? 'Stopped' : 'Scanning…');
+      rerenderList();
+      updateStats();
+    }
+
+    // done
+    _running = false;
+    btnStart.classList.remove('hidden');
+    btnStop.classList.add('hidden');
+    $('progressFill').classList.remove('scanning');
+    $('progressWrap').style.display = 'none';
+
+    const validCount = _allResults.filter(r => r.status === 'valid').length;
+    btnExport.disabled = validCount === 0;
+    btnExportJ.disabled = _allResults.length === 0;
+
+    rerenderList();
+    updateStats(true);
+
+    if (!_abortFlag) {
+      toast(
+        validCount > 0
+          ? `✅ Done — ${validCount} valid cookie${validCount > 1 ? 's' : ''} found`
+          : `Finished — 0 valid cookies`,
+        validCount > 0 ? 'success' : 'info'
+      );
+    }
+  }
+
+  function stopCheck() {
+    _abortFlag = true;
+    toast('Stopping…', 'info');
+  }
+
+  /* ── progress helpers ────────────────────────────────────── */
+  function updateProgress(done, total, label) {
+    const pct = total ? Math.round(done / total * 100) : 0;
+    $('progressFill').style.width = pct + '%';
+    $('progressStatus').textContent = label;
+    $('progressCount').textContent = `${done} / ${total}`;
+  }
+
+  /* ── stats ───────────────────────────────────────────────── */
+  function updateStats(pulse = false) {
+    const total   = _allResults.length;
+    const valid   = _allResults.filter(r => r.status === 'valid').length;
+    const invalid = _allResults.filter(r => r.status === 'invalid').length;
+    const errors  = _allResults.filter(r => r.status === 'error').length;
+
+    function set(id, val, color) {
+      const el = $(id);
+      if (el.textContent !== String(val)) {
+        el.textContent = val;
+        if (pulse) {
+          const card = el.closest('.stat-card');
+          card.classList.remove('pulse');
+          void card.offsetWidth;
+          card.classList.add('pulse');
+        }
+      }
+    }
+    set('sTotal',   total,   'blue');
+    set('sValid',   valid,   'green');
+    set('sInvalid', invalid, 'red');
+    set('sError',   errors,  'amber');
+  }
+
+  /* ── filter / sort ───────────────────────────────────────── */
+  function setFilter(f, el) {
+    _activeFilter = f;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    rerenderList();
+  }
+
+  function getFilteredSorted() {
+    let list = _activeFilter === 'all'
+      ? [..._allResults]
+      : _allResults.filter(r => r.status === _activeFilter);
+
+    const sort = $('sortSelect').value;
+    if (sort === 'status') {
+      const order = { valid: 0, invalid: 1, error: 2 };
+      list.sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
+    } else if (sort === 'valid-first') {
+      list.sort((a, b) => (a.status === 'valid' ? -1 : 1) - (b.status === 'valid' ? -1 : 1));
+    } else {
+      list.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+    }
+    return list;
+  }
+
+  /* ── render ──────────────────────────────────────────────── */
+  function rerenderList() {
+    const container = $('resultsList');
+    const list = getFilteredSorted();
+
+    if (!list.length) {
+      if (!_allResults.length) {
+        container.innerHTML = `
+          <div id="emptyState">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">No results yet — load cookies and press Start</div>
+          </div>`;
+      } else {
+        container.innerHTML = `
+          <div id="emptyState">
+            <div class="empty-icon">🚫</div>
+            <div class="empty-text">No results match the current filter</div>
+          </div>`;
+      }
+      return;
+    }
+
+    container.innerHTML = list.map((r, i) => buildCard(r, i)).join('');
+  }
+
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  function snippet(cookie) {
+    const clean = String(cookie || '');
+    return clean.length > 60 ? clean.slice(0, 60) + '…' : clean;
+  }
+
+  function buildCard(r, i) {
+    const status  = r.status || 'unknown';
+    const details = r.details || {};
+    const tokens  = r.api_tokens || {};
+    const cookie  = r.cookie || '';
+
+    // detail chips
+    let detailHtml = '';
+    if (Object.keys(details).length) {
+      detailHtml = '<div class="detail-grid">';
+      const labels = {
+        email: 'Email', membership: 'Membership', plan: 'Plan',
+        country: 'Country', nextBilling: 'Next Billing', profiles: 'Profiles',
+      };
+      for (const [k, label] of Object.entries(labels)) {
+        if (details[k]) {
+          const green = k === 'membership' && details[k].toLowerCase().includes('current');
+          detailHtml += `
+            <div class="detail-item">
+              <div class="detail-key">${label}</div>
+              <div class="detail-val${green ? ' green' : ''}">${esc(details[k])}</div>
+            </div>`;
+        }
+      }
+      detailHtml += '</div>';
+    }
+
+    // token block
+    let tokenHtml = '';
+    if (tokens.api_token) {
+      const links = Object.values(tokens.direct_links || {}).map(d =>
+        `<a class="link-pill" onclick="openLink('${esc(d.url)}')">${esc(d.name)}</a>`
+      ).join('');
+      tokenHtml = `
+        <div class="token-box">
+          <div class="token-label">🔑 API Token</div>
+          <div class="token-value" id="tok-${i}">${esc(tokens.api_token)}</div>
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-sm" onclick="copyText('tok-${i}')">Copy Token</button>
+          </div>
+          <div class="link-pills">${links}</div>
+        </div>`;
+    }
+
+    const msgLabel = {
+      valid: 'Active session',
+      invalid: r.message || 'Expired',
+      error: r.message || 'Error',
+    }[status] || r.message || '';
+
+    return `
+      <div class="result-card ${esc(status)}" id="card-${i}">
+        <div class="result-header" onclick="toggleCard('card-${i}')">
+          <span class="status-dot ${esc(status)}"></span>
+          <span class="result-index">#${r.index ?? i+1}</span>
+          <span class="result-snippet">${esc(snippet(cookie))}</span>
+          <span class="result-msg ${esc(status)}">${esc(msgLabel)}</span>
+          <span class="result-chevron">▼</span>
+        </div>
+        <div class="result-body">
+          ${detailHtml}
+          <div class="cookie-block" id="ck-${i}">${esc(cookie)}</div>
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-sm" onclick="copyText('ck-${i}')">Copy Cookie</button>
+          </div>
+          ${tokenHtml}
+        </div>
+      </div>`;
+  }
+
+  function toggleCard(id) {
+    document.getElementById(id).classList.toggle('open');
+  }
+
+  /* ── copy / open helpers ─────────────────────────────────── */
+  async function copyText(elId) {
+    const text = document.getElementById(elId)?.textContent ?? '';
+    try {
+      await navigator.clipboard.writeText(text.trim());
+      toast('Copied!', 'success');
+    } catch {
+      toast('Copy failed', 'error');
+    }
+  }
+
+  function openLink(url) { window.open(url, '_blank', 'noopener'); }
+
+  /* ── exports ─────────────────────────────────────────────── */
+  function exportValid() {
+    const valid = _allResults.filter(r => r.status === 'valid');
+    if (!valid.length) return;
+    let out = '═══════════════════════════════\n  NX Checker — Valid Cookies\n═══════════════════════════════\n\n';
+    valid.forEach((r, i) => {
+      out += `[${i+1}]\nCOOKIE: ${r.cookie}\n`;
+      const d = r.details || {};
+      if (d.email)      out += `EMAIL: ${d.email}\n`;
+      if (d.membership) out += `MEMBERSHIP: ${d.membership}\n`;
+      if (d.plan)       out += `PLAN: ${d.plan}\n`;
+      if (d.country)    out += `COUNTRY: ${d.country}\n`;
+      if (r.api_tokens?.api_token) out += `API TOKEN: ${r.api_tokens.api_token}\n`;
+      out += '─'.repeat(40) + '\n';
+    });
+    downloadFile('nx_valid_cookies.txt', out, 'text/plain');
+    toast(`Exported ${valid.length} valid cookies`, 'success');
+  }
+
+  function exportJson() {
+    if (!_allResults.length) return;
+    const data = JSON.stringify({ exported_at: new Date().toISOString(), results: _allResults }, null, 2);
+    downloadFile('nx_results.json', data, 'application/json');
+    toast('JSON exported', 'success');
+  }
+
+  function downloadFile(name, content, type) {
+    const blob = new Blob([content], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ── clear ───────────────────────────────────────────────── */
+  function clearInput() {
+    textarea.value = '';
+    updateLineCount();
+  }
+
+  function clearAll() {
+    if (_running) { toast('Stop the check first', 'error'); return; }
+    _fileCookies = [];
+    _allResults  = [];
+    textarea.value = '';
+    $('dropMeta').textContent = '0 cookies loaded';
+    fileInput.value = '';
+    $('resultsList').innerHTML = `
+      <div id="emptyState">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-text">No results yet — load cookies and press Start</div>
+      </div>`;
+    btnExport.disabled = true;
+    btnExportJ.disabled = true;
+    updateStats();
+    updateLineCount();
+  }
+
+  /* ── proxy modal ─────────────────────────────────────────── */
+  function openProxyModal() { $('proxyModal').classList.add('show'); }
+  function closeProxyModal(e) {
+    if (!e || e.target === $('proxyModal')) $('proxyModal').classList.remove('show');
+  }
+  function saveProxyConfig() {
+    const lines = $('proxyInput').value.split('\n').map(l => l.trim()).filter(Boolean);
+    _proxyList  = lines;
+    _workerCount = Math.max(1, Math.min(20, parseInt($('workerInput').value) || 6));
+    $('proxyModal').classList.remove('show');
+    updateProxyBadge();
+    toast(lines.length ? `${lines.length} proxies saved — redeploy Vercel to activate` : 'Proxies cleared', 'info');
+  }
+  function updateProxyBadge() {
+    const badge = $('proxyBadge');
+    if (_proxyList.length) {
+      badge.className = 'proxy-badge active';
+      badge.innerHTML = `<span class="dot"></span>${_proxyList.length} proxy${_proxyList.length > 1 ? 'ies' : ''}`;
+    } else {
+      badge.className = 'proxy-badge';
+      badge.innerHTML = '<span class="dot"></span>No proxies';
+    }
+  }
+
+  /* ── toast ───────────────────────────────────────────────── */
+  function toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = msg;
+    el.onclick = () => el.remove();
+    $('toastContainer').appendChild(el);
+    setTimeout(() => {
+      el.classList.add('toast-out');
+      setTimeout(() => el.remove(), 220);
+    }, 3000);
+  }
+
+  /* ── init ────────────────────────────────────────────────── */
+  updateLineCount();
+
+  // Ping API to check status + proxies
+  fetch('/api/check').then(r => r.json()).then(data => {
+    if (data.proxies > 0) {
+      _proxyList = new Array(data.proxies).fill('server-side');
+      updateProxyBadge();
+    }
+  }).catch(() => {});
+  </script>
+</body>
+</html>
